@@ -36,9 +36,13 @@ def encode_image(image_path):
 def extract_text(file):
     text = ""
     if file.type == "application/pdf":
-        images = convert_from_path(file)
+        # Save uploaded PDF to a temporary file
+        with open("temp.pdf", "wb") as temp_file:
+            temp_file.write(file.getbuffer())
+        images = convert_from_path("temp.pdf")
         for image in images:
             text += pytesseract.image_to_string(image)
+        os.remove("temp.pdf")
     elif file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
         doc = Document(file)
         text = '\n'.join([paragraph.text for paragraph in doc.paragraphs])
@@ -50,7 +54,7 @@ def extract_text(file):
     # If text is empty, use OCR as a fallback
     if not text:
         if file.type == "application/pdf":
-            images = convert_from_path(file)
+            images = convert_from_path("temp.pdf")
             for image in images:
                 text += pytesseract.image_to_string(image)
         elif file.type.startswith("image/"):
@@ -162,11 +166,9 @@ else:
                     user_prompt = f"Text: {text}"
                     swot_analysis = call_groq_for_swot(text, system_prompt, user_prompt, expected_json_format)
                 else:
-                    image_path = file.name
-                    base64_image = encode_image(image_path)
                     system_prompt = "Perform a SWOT analysis on this image and return a JSON object with keys: Strengths, Weaknesses, Opportunities, Threats."
-                    user_prompt = f"Image: {base64_image}"
-                    swot_analysis = call_openai_for_swot(base64_image, system_prompt, user_prompt, expected_json_format, openai_api_key=st.session_state.openai_api_key)
+                    user_prompt = f"Image: {base64.b64encode(file.read()).decode('utf-8')}"
+                    swot_analysis = call_openai_for_swot(user_prompt, system_prompt, user_prompt, expected_json_format, openai_api_key=st.session_state.openai_api_key)
                 
                 # Validate returned JSON keys
                 if not all(key in swot_analysis for key in expected_json_keys):
