@@ -1,0 +1,11 @@
+streamlit
+openai
+groq
+requests
+pandas
+matplotlib
+scikit-learn
+pytesseract
+Pillow
+pdf2image
+python-docx
