@@ -9,3 +9,4 @@ pytesseract
 Pillow
 pdf2image
 python-docx
+pdfminer.six
