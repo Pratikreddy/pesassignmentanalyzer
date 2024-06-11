@@ -6,10 +6,10 @@ import matplotlib.pyplot as plt
 from sklearn.preprocessing import MinMaxScaler
 from openai import OpenAI
 from groq import Groq
+from pdfminer.high_level import extract_text as extract_text_from_pdf
+from docx import Document
 from PIL import Image
 import pytesseract
-from pdf2image import convert_from_path
-from docx import Document
 import base64
 import os
 import time
@@ -36,13 +36,7 @@ def encode_image(image_path):
 def extract_text(file):
     text = ""
     if file.type == "application/pdf":
-        # Save uploaded PDF to a temporary file
-        with open("temp.pdf", "wb") as temp_file:
-            temp_file.write(file.getbuffer())
-        images = convert_from_path("temp.pdf")
-        for image in images:
-            text += pytesseract.image_to_string(image)
-        os.remove("temp.pdf")
+        text = extract_text_from_pdf(file)
     elif file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
         doc = Document(file)
         text = '\n'.join([paragraph.text for paragraph in doc.paragraphs])
@@ -50,15 +44,6 @@ def extract_text(file):
         text = pytesseract.image_to_string(Image.open(file))
     else:
         text = file.read().decode("utf-8")
-
-    # If text is empty, use OCR as a fallback
-    if not text:
-        if file.type == "application/pdf":
-            images = convert_from_path("temp.pdf")
-            for image in images:
-                text += pytesseract.image_to_string(image)
-        elif file.type.startswith("image/"):
-            text = pytesseract.image_to_string(Image.open(file))
     return text
 
 # Function to call OpenAI for SWOT analysis
@@ -167,8 +152,9 @@ else:
                     swot_analysis = call_groq_for_swot(text, system_prompt, user_prompt, expected_json_format)
                 else:
                     system_prompt = "Perform a SWOT analysis on this image and return a JSON object with keys: Strengths, Weaknesses, Opportunities, Threats."
-                    user_prompt = f"Image: {base64.b64encode(file.read()).decode('utf-8')}"
-                    swot_analysis = call_openai_for_swot(user_prompt, system_prompt, user_prompt, expected_json_format, openai_api_key=st.session_state.openai_api_key)
+                    base64_image = encode_image(file)
+                    user_prompt = f"Image: {base64_image}"
+                    swot_analysis = call_openai_for_swot(base64_image, system_prompt, user_prompt, expected_json_format, openai_api_key=st.session_state.openai_api_key)
                 
                 # Validate returned JSON keys
                 if not all(key in swot_analysis for key in expected_json_keys):
