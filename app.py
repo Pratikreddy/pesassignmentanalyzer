@@ -3,7 +3,6 @@ import requests
 import json
 import pandas as pd
 import matplotlib.pyplot as plt
-from sklearn.preprocessing import MinMaxScaler
 from openai import OpenAI
 from groq import Groq
 from pdfminer.high_level import extract_text as extract_text_from_pdf
@@ -11,8 +10,6 @@ from docx import Document
 from PIL import Image
 import pytesseract
 import base64
-import os
-import time
 
 # Load secrets
 groq_key = st.secrets["groq"]["api_key"]
@@ -65,38 +62,39 @@ def call_groq_for_swot(text, system_prompt, user_prompt, expected_format):
     )
     return json.loads(completion.choices[0].message.content)
 
-# Function to create spider graph
-def create_spider_graph(data, title):
+# Function to create bar graph
+def create_bar_graph(data, title):
     categories = list(data.keys())
     values = list(data.values())
-    values += values[:1]
-    N = len(categories)
-    angles = [n / float(N) * 2 * 3.14 for n in range(N)]
-    angles += angles[:1]
-    ax = plt.subplot(111, polar=True)
-    plt.xticks(angles[:-1], categories, color='grey', size=8)
-    ax.plot(angles, values)
-    ax.fill(angles, values, 'b', alpha=0.1)
-    plt.title(title)
-    st.pyplot(plt)
+    fig, ax = plt.subplots()
+    ax.barh(categories, values, color='skyblue')
+    ax.set_xlabel('Count')
+    ax.set_title(title)
+    st.pyplot(fig)
 
 # Streamlit app
+st.set_page_config(layout="wide")
+
 st.title("Assignment Evaluation Environment")
 
-# Dropdown to select analysis type
-analysis_type = st.selectbox("Select analysis type", ["Text only", "Vision"])
+# Top left analysis type and OpenAI API key input
+col1, col2 = st.columns([1, 3])
+with col1:
+    analysis_type = st.selectbox("Select analysis type", ["Text only", "Vision"])
+with col2:
+    if analysis_type == "Vision":
+        openai_api_key = st.text_input("Enter your OpenAI API key", type="password")
+        if openai_api_key:
+            st.session_state.openai_api_key = openai_api_key
 
-# OpenAI API Key input (only if Vision is selected)
-if analysis_type == "Vision":
-    openai_api_key = st.text_input("Enter your OpenAI API key", type="password")
-    if openai_api_key:
-        st.session_state.openai_api_key = openai_api_key
-
-# Context input
-context = st.text_input("Enter context for the project:")
-
-# Total marks input
-total_marks = st.number_input("Enter total marks for the assignment:", min_value=0, value=100)
+# Context and total marks input
+col1, col2, col3 = st.columns([3, 1, 1])
+with col1:
+    context = st.text_input("Enter context for the project:")
+with col2:
+    total_marks = st.number_input("Enter total marks for the assignment:", min_value=0, value=100)
+with col3:
+    pass
 
 # File uploader
 uploaded_files = st.file_uploader("Upload assignment files", type=["pdf", "docx", "txt", "png", "jpg", "jpeg"], accept_multiple_files=True)
@@ -107,7 +105,8 @@ expected_json_format = {
     "Weaknesses": "",
     "Opportunities": "",
     "Threats": "",
-    "Total Marks": total_marks
+    "Total Marks": total_marks,
+    "Word Count": 0
 }
 expected_json_keys = expected_json_format.keys()
 
@@ -123,15 +122,17 @@ if uploaded_files:
                 st.error(f"No text found in {file.name}.")
                 continue
             
+            word_count = len(text.split())
+            
             # Call appropriate model
             if analysis_type == "Text only":
-                system_prompt = "Perform a SWOT analysis and return a JSON object with keys: Strengths, Weaknesses, Opportunities, Threats, Total Marks."
-                user_prompt = f"Text: {text} Total Marks: {total_marks}"
+                system_prompt = "Perform a SWOT analysis and return a JSON object with keys: Strengths, Weaknesses, Opportunities, Threats, Total Marks, Word Count."
+                user_prompt = f"Text: {text} Total Marks: {total_marks} Word Count: {word_count}"
                 swot_analysis = call_groq_for_swot(text, system_prompt, user_prompt, expected_json_format)
             else:
-                system_prompt = "Perform a SWOT analysis on this image and return a JSON object with keys: Strengths, Weaknesses, Opportunities, Threats, Total Marks."
+                system_prompt = "Perform a SWOT analysis on this image and return a JSON object with keys: Strengths, Weaknesses, Opportunities, Threats, Total Marks, Word Count."
                 base64_image = encode_image(file)
-                user_prompt = f"Image: {base64_image} Total Marks: {total_marks}"
+                user_prompt = f"Image: {base64_image} Total Marks: {total_marks} Word Count: {word_count}"
                 swot_analysis = call_openai_for_swot(base64_image, system_prompt, user_prompt, expected_json_format, openai_api_key=st.session_state.openai_api_key)
             
             # Validate returned JSON keys
@@ -140,14 +141,13 @@ if uploaded_files:
                 continue
             
             # Display SWOT analysis
-            st.subheader(f"SWOT Analysis for {file.name}")
-            st.json(swot_analysis)
+            with st.expander(f"SWOT Analysis for {file.name}"):
+                st.json(swot_analysis)
             
-            # Generate spider graph data
-            scores = {key: len(swot_analysis.get(key, "")) for key in expected_json_keys if key != "Total Marks"}
-            create_spider_graph(scores, title=f"SWOT Analysis for {file.name}")
+            # Generate bar graph data
+            scores = {key: len(swot_analysis.get(key, "")) for key in expected_json_keys if key not in ["Total Marks", "Word Count"]}
+            create_bar_graph(scores, title=f"SWOT Analysis for {file.name}")
             
             # Update progress bar
             progress_bar.progress((idx + 1) / len(uploaded_files))
         progress_bar.empty()
-
