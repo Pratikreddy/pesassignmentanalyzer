@@ -62,15 +62,20 @@ def call_groq_for_swot(text, system_prompt, user_prompt, expected_format):
     )
     return json.loads(completion.choices[0].message.content)
 
-# Function to create bar graph
-def create_bar_graph(data, title):
+# Function to create spider graph
+def create_spider_graph(data, title):
     categories = list(data.keys())
     values = list(data.values())
-    fig, ax = plt.subplots()
-    ax.barh(categories, values, color='skyblue')
-    ax.set_xlabel('Count')
-    ax.set_title(title)
-    st.pyplot(fig)
+    values += values[:1]
+    N = len(categories)
+    angles = [n / float(N) * 2 * 3.14 for n in range(N)]
+    angles += angles[:1]
+    ax = plt.subplot(111, polar=True)
+    plt.xticks(angles[:-1], categories, color='grey', size=8)
+    ax.plot(angles, values)
+    ax.fill(angles, values, 'b', alpha=0.1)
+    plt.title(title)
+    st.pyplot(plt)
 
 # Streamlit app
 st.set_page_config(layout="wide")
@@ -126,11 +131,11 @@ if uploaded_files:
             
             # Call appropriate model
             if analysis_type == "Text only":
-                system_prompt = "Perform a SWOT analysis and return a JSON object with keys: Strengths, Weaknesses, Opportunities, Threats, Total Marks, Word Count."
+                system_prompt = "Perform a SWOT analysis with each category limited to 10 words. Return a JSON object with keys: Strengths, Weaknesses, Opportunities, Threats, Total Marks, Word Count."
                 user_prompt = f"Text: {text} Total Marks: {total_marks} Word Count: {word_count}"
                 swot_analysis = call_groq_for_swot(text, system_prompt, user_prompt, expected_json_format)
             else:
-                system_prompt = "Perform a SWOT analysis on this image and return a JSON object with keys: Strengths, Weaknesses, Opportunities, Threats, Total Marks, Word Count."
+                system_prompt = "Perform a SWOT analysis on this image with each category limited to 10 words. Return a JSON object with keys: Strengths, Weaknesses, Opportunities, Threats, Total Marks, Word Count."
                 base64_image = encode_image(file)
                 user_prompt = f"Image: {base64_image} Total Marks: {total_marks} Word Count: {word_count}"
                 swot_analysis = call_openai_for_swot(base64_image, system_prompt, user_prompt, expected_json_format, openai_api_key=st.session_state.openai_api_key)
@@ -142,11 +147,14 @@ if uploaded_files:
             
             # Display SWOT analysis
             with st.expander(f"SWOT Analysis for {file.name}"):
-                st.json(swot_analysis)
-            
-            # Generate bar graph data
-            scores = {key: len(swot_analysis.get(key, "")) for key in expected_json_keys if key not in ["Total Marks", "Word Count"]}
-            create_bar_graph(scores, title=f"SWOT Analysis for {file.name}")
+                st.write(f"**Word Count:** {swot_analysis['Word Count']}")
+                st.write(f"**Total Marks:** {swot_analysis['Total Marks']}")
+                st.write(f"**Strengths:** {swot_analysis['Strengths']}")
+                st.write(f"**Weaknesses:** {swot_analysis['Weaknesses']}")
+                st.write(f"**Opportunities:** {swot_analysis['Opportunities']}")
+                st.write(f"**Threats:** {swot_analysis['Threats']}")
+                scores = {key: len(swot_analysis.get(key, "")) for key in expected_json_keys if key not in ["Total Marks", "Word Count"]}
+                create_spider_graph(scores, title=f"SWOT Analysis for {file.name}")
             
             # Update progress bar
             progress_bar.progress((idx + 1) / len(uploaded_files))
