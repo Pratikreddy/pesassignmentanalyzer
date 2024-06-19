@@ -2,6 +2,7 @@ import streamlit as st
 import requests
 import json
 import pandas as pd
+import matplotlib.pyplot as plt
 from openai import OpenAI
 from groq import Groq
 from pdfminer.high_level import extract_text as extract_text_from_pdf
@@ -61,33 +62,32 @@ def call_groq_for_swot(text, system_prompt, user_prompt, expected_format):
     )
     return json.loads(completion.choices[0].message.content)
 
-# Function to create a SWOT matrix
-def create_swot_matrix(swot_analysis):
-    html_content = f"""
-    <div style='display: flex; justify-content: space-between; margin-bottom: 10px;'>
-        <div style='border: 2px solid #FFFFFF; padding: 10px; width: 48%; background-color: #FFFFFF;'>
-            <strong>Word Count:</strong> {swot_analysis['Word Count']}<br>
-            <strong>Total Marks:</strong> {swot_analysis['Total Marks']}
-        </div>
-    </div>
-    <div style='display: flex; justify-content: space-between;'>
-        <div style='border: 2px solid #75FF33; padding: 10px; width: 48%;'>
-            <strong>Strengths:</strong> {swot_analysis['Strengths']}
-        </div>
-        <div style='border: 2px solid #FF33D4; padding: 10px; width: 48%;'>
-            <strong>Weaknesses:</strong> {swot_analysis['Weaknesses']}
-        </div>
-    </div>
-    <div style='display: flex; justify-content: space-between; margin-top: 10px;'>
-        <div style='border: 2px solid #FF5733; padding: 10px; width: 48%;'>
-            <strong>Opportunities:</strong> {swot_analysis['Opportunities']}
-        </div>
-        <div style='border: 2px solid #33FFBD; padding: 10px; width: 48%;'>
-            <strong>Threats:</strong> {swot_analysis['Threats']}
-        </div>
-    </div>
-    """
-    st.markdown(html_content, unsafe_allow_html=True)
+# Function to create quadrant chart
+def create_quadrant_chart(swot_analysis):
+    fig, ax = plt.subplots(figsize=(6, 6))
+    
+    # Define the quadrants
+    ax.axhline(0, color='black',linewidth=0.5)
+    ax.axvline(0, color='black',linewidth=0.5)
+    
+    # Remove axes
+    ax.xaxis.set_visible(False)
+    ax.yaxis.set_visible(False)
+    
+    # Add the SWOT points
+    ax.text(-1, 1, 'Strengths', ha='center', va='center', fontsize=12, bbox=dict(facecolor='green', alpha=0.5))
+    ax.text(1, 1, 'Opportunities', ha='center', va='center', fontsize=12, bbox=dict(facecolor='blue', alpha=0.5))
+    ax.text(-1, -1, 'Weaknesses', ha='center', va='center', fontsize=12, bbox=dict(facecolor='red', alpha=0.5))
+    ax.text(1, -1, 'Threats', ha='center', va='center', fontsize=12, bbox=dict(facecolor='orange', alpha=0.5))
+    
+    # Plot the SWOT text within each quadrant
+    ax.text(-1, 0.5, swot_analysis['Strengths'], ha='center', va='center', fontsize=10, bbox=dict(facecolor='green', alpha=0.1))
+    ax.text(1, 0.5, swot_analysis['Opportunities'], ha='center', va='center', fontsize=10, bbox=dict(facecolor='blue', alpha=0.1))
+    ax.text(-1, -0.5, swot_analysis['Weaknesses'], ha='center', va='center', fontsize=10, bbox=dict(facecolor='red', alpha=0.1))
+    ax.text(1, -0.5, swot_analysis['Threats'], ha='center', va='center', fontsize=10, bbox=dict(facecolor='orange', alpha=0.1))
+
+    plt.title('SWOT Analysis')
+    st.pyplot(fig)
 
 # Streamlit app
 st.set_page_config(layout="wide")
@@ -159,7 +159,12 @@ if uploaded_files:
             
             # Display SWOT analysis with bounding boxes and colors
             with st.expander(f"SWOT Analysis for {file.name}"):
-                create_swot_matrix(swot_analysis)
+                st.markdown(f"<div style='border:2px solid #FFFFFF; padding: 10px; margin-bottom: 10px;'><strong>Word Count:</strong> {swot_analysis['Word Count']}<br><strong>Total Marks:</strong> {swot_analysis['Total Marks']}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='border:2px solid #75FF33; padding: 10px; margin-bottom: 10px;'><strong>Strengths:</strong> {swot_analysis['Strengths']}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='border:2px solid #FF33D4; padding: 10px; margin-bottom: 10px;'><strong>Weaknesses:</strong> {swot_analysis['Weaknesses']}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='border:2px solid #FF5733; padding: 10px; margin-bottom: 10px;'><strong>Opportunities:</strong> {swot_analysis['Opportunities']}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='border:2px solid #33FFBD; padding: 10px; margin-bottom: 10px;'><strong>Threats:</strong> {swot_analysis['Threats']}</div>", unsafe_allow_html=True)
+                create_quadrant_chart(swot_analysis)
             
             # Update progress bar
             progress_bar.progress((idx + 1) / len(uploaded_files))
