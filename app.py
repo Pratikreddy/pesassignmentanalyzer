@@ -74,7 +74,7 @@ def create_spider_graph(data, title):
     plt.xticks(angles[:-1], categories, color='grey', size=8)
     ax.plot(angles, values)
     ax.fill(angles, values, 'b', alpha=0.1)
-    plt.title(title)
+    plt.title(title, size=12)
     st.pyplot(fig)
 
 # Streamlit app
@@ -147,7 +147,7 @@ if uploaded_files:
             
             # Display SWOT analysis with bounding boxes and colors
             with st.expander(f"SWOT Analysis for {file.name}"):
-                st.markdown(f"<div style='border:2px solid #FFFFFF; background-color:#FFFFFF; padding: 10px; margin-bottom: 10px;'><strong>Word Count:</strong> {swot_analysis['Word Count']}<br><strong>Total Marks:</strong> {swot_analysis['Total Marks']}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='border:2px solid #FFFFFF; padding: 10px; margin-bottom: 10px;'><strong>Word Count:</strong> {swot_analysis['Word Count']}<br><strong>Total Marks:</strong> {swot_analysis['Total Marks']}</div>", unsafe_allow_html=True)
                 st.markdown(f"<div style='border:2px solid #75FF33; padding: 10px; margin-bottom: 10px;'><strong>Strengths:</strong> {swot_analysis['Strengths']}</div>", unsafe_allow_html=True)
                 st.markdown(f"<div style='border:2px solid #FF33D4; padding: 10px; margin-bottom: 10px;'><strong>Weaknesses:</strong> {swot_analysis['Weaknesses']}</div>", unsafe_allow_html=True)
                 st.markdown(f"<div style='border:2px solid #FF5733; padding: 10px; margin-bottom: 10px;'><strong>Opportunities:</strong> {swot_analysis['Opportunities']}</div>", unsafe_allow_html=True)
