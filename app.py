@@ -145,14 +145,14 @@ if uploaded_files:
                 st.error(f"Invalid SWOT analysis response for {file.name}. Missing keys.")
                 continue
             
-            # Display SWOT analysis
+            # Display SWOT analysis with bounding boxes and colors
             with st.expander(f"SWOT Analysis for {file.name}"):
-                st.write(f"**Word Count:** {swot_analysis['Word Count']}")
-                st.write(f"**Total Marks:** {swot_analysis['Total Marks']}")
-                st.write(f"**Strengths:** {swot_analysis['Strengths']}")
-                st.write(f"**Weaknesses:** {swot_analysis['Weaknesses']}")
-                st.write(f"**Opportunities:** {swot_analysis['Opportunities']}")
-                st.write(f"**Threats:** {swot_analysis['Threats']}")
+                st.markdown(f"<div style='border:2px solid #FF5733; padding: 10px; margin-bottom: 10px;'><strong>Word Count:</strong> {swot_analysis['Word Count']}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='border:2px solid #33C1FF; padding: 10px; margin-bottom: 10px;'><strong>Total Marks:</strong> {swot_analysis['Total Marks']}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='border:2px solid #75FF33; padding: 10px; margin-bottom: 10px;'><strong>Strengths:</strong> {swot_analysis['Strengths']}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='border:2px solid #FF33D4; padding: 10px; margin-bottom: 10px;'><strong>Weaknesses:</strong> {swot_analysis['Weaknesses']}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='border:2px solid #FF5733; padding: 10px; margin-bottom: 10px;'><strong>Opportunities:</strong> {swot_analysis['Opportunities']}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='border:2px solid #33FFBD; padding: 10px; margin-bottom: 10px;'><strong>Threats:</strong> {swot_analysis['Threats']}</div>", unsafe_allow_html=True)
                 scores = {key: len(swot_analysis.get(key, "")) for key in expected_json_keys if key not in ["Total Marks", "Word Count"]}
                 create_spider_graph(scores, title=f"SWOT Analysis for {file.name}")
             
