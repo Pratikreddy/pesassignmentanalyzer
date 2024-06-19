@@ -2,7 +2,6 @@ import streamlit as st
 import requests
 import json
 import pandas as pd
-import matplotlib.pyplot as plt
 from openai import OpenAI
 from groq import Groq
 from pdfminer.high_level import extract_text as extract_text_from_pdf
@@ -62,33 +61,6 @@ def call_groq_for_swot(text, system_prompt, user_prompt, expected_format):
     )
     return json.loads(completion.choices[0].message.content)
 
-# Function to create quadrant chart
-def create_quadrant_chart(swot_analysis):
-    fig, ax = plt.subplots(figsize=(6, 6))
-    
-    # Define the quadrants
-    ax.axhline(0, color='black',linewidth=0.5)
-    ax.axvline(0, color='black',linewidth=0.5)
-    
-    # Remove axes
-    ax.xaxis.set_visible(False)
-    ax.yaxis.set_visible(False)
-    
-    # Add the SWOT points
-    ax.text(-1, 1, 'Strengths', ha='center', va='center', fontsize=12, bbox=dict(facecolor='green', alpha=0.5))
-    ax.text(1, 1, 'Opportunities', ha='center', va='center', fontsize=12, bbox=dict(facecolor='blue', alpha=0.5))
-    ax.text(-1, -1, 'Weaknesses', ha='center', va='center', fontsize=12, bbox=dict(facecolor='red', alpha=0.5))
-    ax.text(1, -1, 'Threats', ha='center', va='center', fontsize=12, bbox=dict(facecolor='orange', alpha=0.5))
-    
-    # Plot the SWOT text within each quadrant
-    ax.text(-1, 0.5, swot_analysis['Strengths'], ha='center', va='center', fontsize=10, bbox=dict(facecolor='green', alpha=0.1))
-    ax.text(1, 0.5, swot_analysis['Opportunities'], ha='center', va='center', fontsize=10, bbox=dict(facecolor='blue', alpha=0.1))
-    ax.text(-1, -0.5, swot_analysis['Weaknesses'], ha='center', va='center', fontsize=10, bbox=dict(facecolor='red', alpha=0.1))
-    ax.text(1, -0.5, swot_analysis['Threats'], ha='center', va='center', fontsize=10, bbox=dict(facecolor='orange', alpha=0.1))
-
-    plt.title('SWOT Analysis')
-    st.pyplot(fig)
-
 # Streamlit app
 st.set_page_config(layout="wide")
 
@@ -111,7 +83,7 @@ with col1:
 with col2:
     total_marks = st.number_input("Enter total marks for the assignment:", min_value=0, value=100)
 with col3:
-    max_word_count = st.slider("Set maximum word count:", min_value=10, max_value=1000, value=100, step=10)
+    max_word_count = st.slider("Set maximum word count:", min_value=100, max_value=3000, value=300, step=100)
 
 # File uploader
 uploaded_files = st.file_uploader("Upload assignment files", type=["pdf", "docx", "txt", "png", "jpg", "jpeg"], accept_multiple_files=True)
@@ -126,6 +98,17 @@ expected_json_format = {
     "Word Count": 0
 }
 expected_json_keys = expected_json_format.keys()
+
+# Grading criteria to guide the LLM
+grading_criteria = """
+Grading Criteria:
+1. Content quality (40%): How well the text addresses the topic.
+2. Clarity and coherence (30%): How clear and logical the text is.
+3. Grammar and language (20%): Correct use of grammar and language.
+4. Originality (10%): Uniqueness and originality of the content.
+
+Use these criteria to assign marks out of {total_marks}.
+"""
 
 # Process files
 if uploaded_files:
@@ -144,12 +127,12 @@ if uploaded_files:
             # Call appropriate model
             if analysis_type == "Text only":
                 system_prompt = f"Perform a SWOT analysis with each category limited to {max_word_count} words. Return a JSON object with keys: Strengths, Weaknesses, Opportunities, Threats, Total Marks, Word Count."
-                user_prompt = f"Text: {text} Total Marks: {total_marks} Word Count: {word_count}"
+                user_prompt = f"Text: {text}\nTotal Marks: {total_marks}\nWord Count: {word_count}\n{grading_criteria.format(total_marks=total_marks)}"
                 swot_analysis = call_groq_for_swot(text, system_prompt, user_prompt, expected_json_format)
             else:
                 system_prompt = f"Perform a SWOT analysis on this image with each category limited to {max_word_count} words. Return a JSON object with keys: Strengths, Weaknesses, Opportunities, Threats, Total Marks, Word Count."
                 base64_image = encode_image(file)
-                user_prompt = f"Image: {base64_image} Total Marks: {total_marks} Word Count: {word_count}"
+                user_prompt = f"Image: {base64_image}\nTotal Marks: {total_marks}\nWord Count: {word_count}\n{grading_criteria.format(total_marks=total_marks)}"
                 swot_analysis = call_openai_for_swot(base64_image, system_prompt, user_prompt, expected_json_format, openai_api_key=st.session_state.openai_api_key)
             
             # Validate returned JSON keys
@@ -164,7 +147,6 @@ if uploaded_files:
                 st.markdown(f"<div style='border:2px solid #FF33D4; padding: 10px; margin-bottom: 10px;'><strong>Weaknesses:</strong> {swot_analysis['Weaknesses']}</div>", unsafe_allow_html=True)
                 st.markdown(f"<div style='border:2px solid #FF5733; padding: 10px; margin-bottom: 10px;'><strong>Opportunities:</strong> {swot_analysis['Opportunities']}</div>", unsafe_allow_html=True)
                 st.markdown(f"<div style='border:2px solid #33FFBD; padding: 10px; margin-bottom: 10px;'><strong>Threats:</strong> {swot_analysis['Threats']}</div>", unsafe_allow_html=True)
-                create_quadrant_chart(swot_analysis)
             
             # Update progress bar
             progress_bar.progress((idx + 1) / len(uploaded_files))
