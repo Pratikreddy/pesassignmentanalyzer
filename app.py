@@ -2,7 +2,6 @@ import streamlit as st
 import requests
 import json
 import pandas as pd
-import matplotlib.pyplot as plt
 from openai import OpenAI
 from groq import Groq
 from pdfminer.high_level import extract_text as extract_text_from_pdf
@@ -62,20 +61,33 @@ def call_groq_for_swot(text, system_prompt, user_prompt, expected_format):
     )
     return json.loads(completion.choices[0].message.content)
 
-# Function to create spider graph
-def create_spider_graph(data, title):
-    categories = list(data.keys())
-    values = list(data.values())
-    values += values[:1]
-    N = len(categories)
-    angles = [n / float(N) * 2 * 3.14 for n in range(N)]
-    angles += angles[:1]
-    fig, ax = plt.subplots(figsize=(3.5, 3.5), subplot_kw=dict(polar=True))
-    plt.xticks(angles[:-1], categories, color='grey', size=8)
-    ax.plot(angles, values)
-    ax.fill(angles, values, 'b', alpha=0.1)
-    plt.title(title, size=12)
-    st.pyplot(fig)
+# Function to create a SWOT matrix
+def create_swot_matrix(swot_analysis):
+    html_content = f"""
+    <div style='display: flex; justify-content: space-between; margin-bottom: 10px;'>
+        <div style='border: 2px solid #FFFFFF; padding: 10px; width: 48%; background-color: #FFFFFF;'>
+            <strong>Word Count:</strong> {swot_analysis['Word Count']}<br>
+            <strong>Total Marks:</strong> {swot_analysis['Total Marks']}
+        </div>
+    </div>
+    <div style='display: flex; justify-content: space-between;'>
+        <div style='border: 2px solid #75FF33; padding: 10px; width: 48%;'>
+            <strong>Strengths:</strong> {swot_analysis['Strengths']}
+        </div>
+        <div style='border: 2px solid #FF33D4; padding: 10px; width: 48%;'>
+            <strong>Weaknesses:</strong> {swot_analysis['Weaknesses']}
+        </div>
+    </div>
+    <div style='display: flex; justify-content: space-between; margin-top: 10px;'>
+        <div style='border: 2px solid #FF5733; padding: 10px; width: 48%;'>
+            <strong>Opportunities:</strong> {swot_analysis['Opportunities']}
+        </div>
+        <div style='border: 2px solid #33FFBD; padding: 10px; width: 48%;'>
+            <strong>Threats:</strong> {swot_analysis['Threats']}
+        </div>
+    </div>
+    """
+    st.markdown(html_content, unsafe_allow_html=True)
 
 # Streamlit app
 st.set_page_config(layout="wide")
@@ -147,13 +159,7 @@ if uploaded_files:
             
             # Display SWOT analysis with bounding boxes and colors
             with st.expander(f"SWOT Analysis for {file.name}"):
-                st.markdown(f"<div style='border:2px solid #FFFFFF; padding: 10px; margin-bottom: 10px;'><strong>Word Count:</strong> {swot_analysis['Word Count']}<br><strong>Total Marks:</strong> {swot_analysis['Total Marks']}</div>", unsafe_allow_html=True)
-                st.markdown(f"<div style='border:2px solid #75FF33; padding: 10px; margin-bottom: 10px;'><strong>Strengths:</strong> {swot_analysis['Strengths']}</div>", unsafe_allow_html=True)
-                st.markdown(f"<div style='border:2px solid #FF33D4; padding: 10px; margin-bottom: 10px;'><strong>Weaknesses:</strong> {swot_analysis['Weaknesses']}</div>", unsafe_allow_html=True)
-                st.markdown(f"<div style='border:2px solid #FF5733; padding: 10px; margin-bottom: 10px;'><strong>Opportunities:</strong> {swot_analysis['Opportunities']}</div>", unsafe_allow_html=True)
-                st.markdown(f"<div style='border:2px solid #33FFBD; padding: 10px; margin-bottom: 10px;'><strong>Threats:</strong> {swot_analysis['Threats']}</div>", unsafe_allow_html=True)
-                scores = {key: len(swot_analysis.get(key, "")) for key in expected_json_keys if key not in ["Total Marks", "Word Count"]}
-                create_spider_graph(scores, title=f"SWOT Analysis for {file.name}")
+                create_swot_matrix(swot_analysis)
             
             # Update progress bar
             progress_bar.progress((idx + 1) / len(uploaded_files))
