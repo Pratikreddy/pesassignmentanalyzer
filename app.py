@@ -70,12 +70,12 @@ def create_spider_graph(data, title):
     N = len(categories)
     angles = [n / float(N) * 2 * 3.14 for n in range(N)]
     angles += angles[:1]
-    ax = plt.subplot(111, polar=True)
+    fig, ax = plt.subplots(figsize=(3.5, 3.5), subplot_kw=dict(polar=True))
     plt.xticks(angles[:-1], categories, color='grey', size=8)
     ax.plot(angles, values)
     ax.fill(angles, values, 'b', alpha=0.1)
     plt.title(title)
-    st.pyplot(plt)
+    st.pyplot(fig)
 
 # Streamlit app
 st.set_page_config(layout="wide")
@@ -93,13 +93,13 @@ with col2:
             st.session_state.openai_api_key = openai_api_key
 
 # Context and total marks input
-col1, col2, col3 = st.columns([3, 1, 1])
+col1, col2, col3 = st.columns([2, 1, 1])
 with col1:
     context = st.text_input("Enter context for the project:")
 with col2:
     total_marks = st.number_input("Enter total marks for the assignment:", min_value=0, value=100)
 with col3:
-    pass
+    max_word_count = st.slider("Set maximum word count:", min_value=10, max_value=1000, value=100, step=10)
 
 # File uploader
 uploaded_files = st.file_uploader("Upload assignment files", type=["pdf", "docx", "txt", "png", "jpg", "jpeg"], accept_multiple_files=True)
@@ -131,11 +131,11 @@ if uploaded_files:
             
             # Call appropriate model
             if analysis_type == "Text only":
-                system_prompt = "Perform a SWOT analysis with each category limited to 10 words. Return a JSON object with keys: Strengths, Weaknesses, Opportunities, Threats, Total Marks, Word Count."
+                system_prompt = f"Perform a SWOT analysis with each category limited to {max_word_count} words. Return a JSON object with keys: Strengths, Weaknesses, Opportunities, Threats, Total Marks, Word Count."
                 user_prompt = f"Text: {text} Total Marks: {total_marks} Word Count: {word_count}"
                 swot_analysis = call_groq_for_swot(text, system_prompt, user_prompt, expected_json_format)
             else:
-                system_prompt = "Perform a SWOT analysis on this image with each category limited to 10 words. Return a JSON object with keys: Strengths, Weaknesses, Opportunities, Threats, Total Marks, Word Count."
+                system_prompt = f"Perform a SWOT analysis on this image with each category limited to {max_word_count} words. Return a JSON object with keys: Strengths, Weaknesses, Opportunities, Threats, Total Marks, Word Count."
                 base64_image = encode_image(file)
                 user_prompt = f"Image: {base64_image} Total Marks: {total_marks} Word Count: {word_count}"
                 swot_analysis = call_openai_for_swot(base64_image, system_prompt, user_prompt, expected_json_format, openai_api_key=st.session_state.openai_api_key)
@@ -147,8 +147,7 @@ if uploaded_files:
             
             # Display SWOT analysis with bounding boxes and colors
             with st.expander(f"SWOT Analysis for {file.name}"):
-                st.markdown(f"<div style='border:2px solid #FF5733; padding: 10px; margin-bottom: 10px;'><strong>Word Count:</strong> {swot_analysis['Word Count']}</div>", unsafe_allow_html=True)
-                st.markdown(f"<div style='border:2px solid #33C1FF; padding: 10px; margin-bottom: 10px;'><strong>Total Marks:</strong> {swot_analysis['Total Marks']}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='border:2px solid #FFFFFF; background-color:#FFFFFF; padding: 10px; margin-bottom: 10px;'><strong>Word Count:</strong> {swot_analysis['Word Count']}<br><strong>Total Marks:</strong> {swot_analysis['Total Marks']}</div>", unsafe_allow_html=True)
                 st.markdown(f"<div style='border:2px solid #75FF33; padding: 10px; margin-bottom: 10px;'><strong>Strengths:</strong> {swot_analysis['Strengths']}</div>", unsafe_allow_html=True)
                 st.markdown(f"<div style='border:2px solid #FF33D4; padding: 10px; margin-bottom: 10px;'><strong>Weaknesses:</strong> {swot_analysis['Weaknesses']}</div>", unsafe_allow_html=True)
                 st.markdown(f"<div style='border:2px solid #FF5733; padding: 10px; margin-bottom: 10px;'><strong>Opportunities:</strong> {swot_analysis['Opportunities']}</div>", unsafe_allow_html=True)
