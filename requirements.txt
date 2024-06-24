@@ -1,16 +1,4 @@
 streamlit
-openai
-groq
-requests
-pandas
-matplotlib
-scikit-learn
-pytesseract
-Pillow
-pdf2image
-python-docx
-pdfminer.six
-streamlit
 requests
 json
 pandas
@@ -20,4 +8,3 @@ pytesseract
 python-docx
 openai
 gemini-api
-
