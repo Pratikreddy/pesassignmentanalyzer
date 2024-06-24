@@ -19,9 +19,10 @@ gemini_key = st.secrets["gemini"]["api_key"]
 genai.configure(api_key=gemini_key)
 
 # Function to encode image to base64
-def encode_image(image_path):
-    with open(image_path, "rb") as image_file:
-        return base64.b64encode(image_file.read()).decode('utf-8')
+def encode_image(image):
+    buffered = io.BytesIO()
+    image.save(buffered, format="PNG")
+    return base64.b64encode(buffered.getvalue()).decode('utf-8')
 
 # Function to extract text from different file types
 def extract_text(file):
@@ -67,11 +68,6 @@ def gemini_json(system_prompt, user_prompt, api_key):
         return json.loads(response_data["candidates"][0]["content"]["parts"][0]["text"])
     return {}
 
-# Helper function to read image bytes and encode them in base64
-def read_image_base64(image_path):
-    with open(image_path, 'rb') as image_file:
-        return base64.b64encode(image_file.read()).decode('utf-8')
-
 # Helper function to get MIME type based on file extension
 def get_mime_type(file_path):
     mime_type, _ = mimetypes.guess_type(file_path)
@@ -82,8 +78,8 @@ def process_images_gemini(images, prompt, api_key):
     encoded_images = []
     for image in images:
         encoded_images.append({
-            'mime_type': get_mime_type(image),
-            'data': read_image_base64(image)
+            'mime_type': 'image/png',
+            'data': encode_image(image)
         })
 
     model = genai.GenerativeModel("gemini-1.5-flash")
@@ -98,10 +94,7 @@ def process_images_gemini(images, prompt, api_key):
 # Function to convert PDF to images using PyMuPDF
 def pdf_to_images(pdf_file):
     images = []
-    file_bytes = pdf_file.read()
-    if not file_bytes:
-        raise ValueError("The PDF file is empty.")
-    document = fitz.open(stream=io.BytesIO(file_bytes), filetype="pdf")
+    document = fitz.open(stream=pdf_file, filetype="pdf")
     for page_num in range(len(document)):
         page = document.load_page(page_num)
         pix = page.get_pixmap()
@@ -157,6 +150,13 @@ Use these criteria to assign marks out of {total_marks}.
 if uploaded_files:
     progress_bar = st.progress(0)
     for idx, file in enumerate(uploaded_files):
+        if file.type == "application/pdf":
+            file_bytes = file.read()
+            if not file_bytes:
+                st.error(f"The PDF file {file.name} is empty.")
+                continue
+            file = io.BytesIO(file_bytes)
+        
         text = extract_text(file)
         if not text:
             st.error(f"No text found in {file.name}.")
@@ -175,8 +175,7 @@ if uploaded_files:
             if not images:
                 st.error(f"No images extracted from {file.name}.")
                 continue
-            base64_images = [read_image_base64(image) for image in images]
-            user_prompt = f"Extract data from these images:\n" + "\n".join(base64_images) + f"\nTotal Marks: {total_marks}\nWord Count: {word_count}\n{grading_criteria.format(total_marks=total_marks)}"
+            user_prompt = f"Extract data from these images:\n" + "\n".join([encode_image(image) for image in images]) + f"\nTotal Marks: {total_marks}\nWord Count: {word_count}\n{grading_criteria.format(total_marks=total_marks)}"
             swot_analysis = process_images_gemini(images, user_prompt, gemini_key)
         
         # Validate returned JSON keys
