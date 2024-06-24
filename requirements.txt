@@ -1,9 +1,9 @@
 streamlit
 requests
 pandas
-pdf2image
 pillow
 python-docx
 pdfminer.six
 pytesseract
 google-generativeai
+pymupdf
