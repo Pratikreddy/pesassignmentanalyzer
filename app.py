@@ -48,39 +48,23 @@ def gemini_json(system_prompt, user_prompt, api_key):
         "contents": [
             {
                 "parts": [
-                    {
-                        "text": f"{system_prompt}"  # System prompt
-                    },
-                    {
-                        "text": f"{user_prompt}"  # User prompt
-                    },
-                    {
-                        "text": ""  # Empty text for response
-                    }
+                    {"text": system_prompt},
+                    {"text": user_prompt},
+                    {"text": ""}
                 ]
             }
         ],
-        "generationConfig": {
-            "response_mime_type": "application/json"  # Response format
-        }
+        "generationConfig": {"response_mime_type": "application/json"}
     })
 
-    # Set the Content-Type header to application/json
-    headers = {
-        'Content-Type': 'application/json'
-    }
+    headers = {'Content-Type': 'application/json'}
 
-    # Send a POST request to the Gemini API
     response = requests.post(url, headers=headers, data=payload)
-    
-    # Parse the JSON response
     response_data = response.json()
     
-    # Extract the 'text' value from the first candidate's content
-    text_value = response_data["candidates"][0]["content"]["parts"][0]["text"]
-    
-    # Return the extracted string
-    return text_value
+    if "candidates" in response_data and response_data["candidates"]:
+        return json.loads(response_data["candidates"][0]["content"]["parts"][0]["text"])
+    return {}
 
 # Helper function to read image bytes and encode them in base64
 def read_image_base64(image_path):
@@ -101,18 +85,11 @@ def process_images_gemini(images, prompt, api_key):
             'data': read_image_base64(image)
         })
 
-    # Create model instance
     model = genai.GenerativeModel("gemini-1.5-flash")
-
-    # Prepare content
     content = [prompt] + encoded_images
 
-    # Generate content
     try:
-        response = model.generate_content(
-            content,
-            generation_config={"response_mime_type": "application/json"}
-        )
+        response = model.generate_content(content, generation_config={"response_mime_type": "application/json"})
         return json.loads(response.text)
     except Exception as e:
         return {"error": str(e)}
@@ -182,18 +159,16 @@ if uploaded_files:
         
         word_count = len(text.split())
         
-        # Call appropriate model
+        # Construct prompts and call appropriate model
+        system_prompt = f"Perform a SWOT analysis with each category limited to {max_word_count} words. Return a JSON object with keys: Strengths, Weaknesses, Opportunities, Threats, Total Marks, Word Count."
+        user_prompt = f"Text: {text}\nTotal Marks: {total_marks}\nWord Count: {word_count}\n{grading_criteria.format(total_marks=total_marks)}"
+        
         if analysis_type == "Text only":
-            system_prompt = f"Perform a SWOT analysis with each category limited to {max_word_count} words. Return a JSON object with keys: Strengths, Weaknesses, Opportunities, Threats, Total Marks, Word Count."
-            user_prompt = f"Text: {text}\nTotal Marks: {total_marks}\nWord Count: {word_count}\n{grading_criteria.format(total_marks=total_marks)}"
             swot_analysis = gemini_json(system_prompt, user_prompt, gemini_key)
         else:
-            system_prompt = f"Perform a SWOT analysis on this image with each category limited to {max_word_count} words. Return a JSON object with keys: Strengths, Weaknesses, Opportunities, Threats, Total Marks, Word Count."
             images = pdf_to_images(file)
-            for image_path in images:
-                base64_image = encode_image(image_path)
-                user_prompt = f"Image: {base64_image}\nTotal Marks: {total_marks}\nWord Count: {word_count}\n{grading_criteria.format(total_marks=total_marks)}"
-                swot_analysis = process_images_gemini(images, user_prompt, gemini_key)
+            user_prompt = f"Extract data from these images: {images}\nTotal Marks: {total_marks}\nWord Count: {word_count}\n{grading_criteria.format(total_marks=total_marks)}"
+            swot_analysis = process_images_gemini(images, user_prompt, gemini_key)
         
         # Validate returned JSON keys
         if not all(key in swot_analysis for key in expected_json_keys):
@@ -202,11 +177,11 @@ if uploaded_files:
         
         # Display SWOT analysis with bounding boxes and colors
         with st.expander(f"SWOT Analysis for {file.name}"):
-            st.markdown(f"<div style='border:2px solid #FFFFFF; padding: 10px; margin-bottom: 10px;'><strong>Word Count:</strong> {swot_analysis['Word Count']}<br><strong>Total Marks:</strong> {swot_analysis['Total Marks']}</div>", unsafe_allow_html=True)
-            st.markdown(f"<div style='border:2px solid #75FF33; padding: 10px; margin-bottom: 10px;'><strong>Strengths:</strong> {swot_analysis['Strengths']}</div>", unsafe_allow_html=True)
-            st.markdown(f"<div style='border:2px solid #FF33D4; padding: 10px; margin-bottom: 10px;'><strong>Weaknesses:</strong> {swot_analysis['Weaknesses']}</div>", unsafe_allow_html=True)
-            st.markdown(f"<div style='border:2px solid #FF5733; padding: 10px; margin-bottom: 10px;'><strong>Opportunities:</strong> {swot_analysis['Opportunities']}</div>", unsafe_allow_html=True)
-            st.markdown(f"<div style='border:2px solid #33FFBD; padding: 10px; margin-bottom: 10px;'><strong>Threats:</strong> {swot_analysis['Threats']}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='border:2px solid #FFFFFF; padding: 10px; margin-bottom: 10px;'><strong>Word Count:</strong> {swot_analysis.get('Word Count', 'N/A')}<br><strong>Total Marks:</strong> {swot_analysis.get('Total Marks', 'N/A')}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='border:2px solid #75FF33; padding: 10px; margin-bottom: 10px;'><strong>Strengths:</strong> {swot_analysis.get('Strengths', 'N/A')}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='border:2px solid #FF33D4; padding: 10px; margin-bottom: 10px;'><strong>Weaknesses:</strong> {swot_analysis.get('Weaknesses', 'N/A')}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='border:2px solid #FF5733; padding: 10px; margin-bottom: 10px;'><strong>Opportunities:</strong> {swot_analysis.get('Opportunities', 'N/A')}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='border:2px solid #33FFBD; padding: 10px; margin-bottom: 10px;'><strong>Threats:</strong> {swot_analysis.get('Threats', 'N/A')}</div>", unsafe_allow_html=True)
         
         # Update progress bar
         progress_bar.progress((idx + 1) / len(uploaded_files))
