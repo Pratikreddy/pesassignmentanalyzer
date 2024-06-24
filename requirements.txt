@@ -10,3 +10,14 @@ Pillow
 pdf2image
 python-docx
 pdfminer.six
+streamlit
+requests
+json
+pandas
+pdf2image
+pillow
+pytesseract
+python-docx
+openai
+gemini-api
+
