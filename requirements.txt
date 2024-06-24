@@ -6,5 +6,4 @@ pdf2image
 pillow
 python-docx
 pdfminer.six
-openai
 google-api-python-client
