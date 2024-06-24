@@ -168,6 +168,9 @@ if uploaded_files:
             swot_analysis = gemini_json(system_prompt, user_prompt, gemini_key)
         else:
             images = pdf_to_images(file)
+            if not images:
+                st.error(f"No images extracted from {file.name}.")
+                continue
             user_prompt = f"Extract data from these images: {images}\nTotal Marks: {total_marks}\nWord Count: {word_count}\n{grading_criteria.format(total_marks=total_marks)}"
             swot_analysis = process_images_gemini(images, user_prompt, gemini_key)
         
