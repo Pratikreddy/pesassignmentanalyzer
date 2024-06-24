@@ -7,8 +7,8 @@ from docx import Document
 from pdfminer.high_level import extract_text as extract_text_from_pdf
 from PIL import Image
 import base64
-import google.generativeai as genai
 import mimetypes
+import google.generativeai as genai
 
 # Load secrets
 gemini_key = st.secrets["gemini"]["api_key"]
