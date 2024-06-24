@@ -3,9 +3,18 @@ import requests
 import json
 import pandas as pd
 from pdf2image import convert_from_path
+from docx import Document
+from pdfminer.high_level import extract_text as extract_text_from_pdf
 from PIL import Image
-import pytesseract
 import base64
+import google.generativeai as genai
+import mimetypes
+
+# Load secrets
+gemini_key = st.secrets["gemini"]["api_key"]
+
+# Configure the Gemini API key
+genai.configure(api_key=gemini_key)
 
 # Function to encode image to base64
 def encode_image(image_path):
@@ -20,14 +29,14 @@ def extract_text(file):
     elif file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
         doc = Document(file)
         text = '\n'.join([paragraph.text for paragraph in doc.paragraphs])
-    elif file.type.startswith("image/"):
-        text = pytesseract.image_to_string(Image.open(file))
     else:
         text = file.read().decode("utf-8")
     return text
 
-# Function to interact with the Gemini API
-def gemini_json(system_prompt, user_prompt, url, api_key):
+# Function to interact with the Gemini API for text analysis
+def gemini_json(system_prompt, user_prompt, api_key):
+    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=" + api_key
+    
     # Create a JSON payload for the API request
     payload = json.dumps({
         "contents": [
@@ -52,12 +61,11 @@ def gemini_json(system_prompt, user_prompt, url, api_key):
 
     # Set the Content-Type header to application/json
     headers = {
-        'Content-Type': 'application/json',
-        'Authorization': f'Bearer {api_key}'
+        'Content-Type': 'application/json'
     }
 
     # Send a POST request to the Gemini API
-    response = requests.request("POST", url, headers=headers, data=payload)
+    response = requests.post(url, headers=headers, data=payload)
     
     # Parse the JSON response
     response_data = response.json()
@@ -67,6 +75,41 @@ def gemini_json(system_prompt, user_prompt, url, api_key):
     
     # Return the extracted string
     return text_value
+
+# Helper function to read image bytes and encode them in base64
+def read_image_base64(image_path):
+    with open(image_path, 'rb') as image_file:
+        return base64.b64encode(image_file.read()).decode('utf-8')
+
+# Helper function to get MIME type based on file extension
+def get_mime_type(file_path):
+    mime_type, _ = mimetypes.guess_type(file_path)
+    return mime_type or 'application/octet-stream'
+
+# Function to process images and send to Gemini Vision API
+def process_images_gemini(images, prompt, api_key):
+    encoded_images = []
+    for image in images:
+        encoded_images.append({
+            'mime_type': get_mime_type(image),
+            'data': read_image_base64(image)
+        })
+
+    # Create model instance
+    model = genai.GenerativeModel("gemini-1.5-flash")
+
+    # Prepare content
+    content = [prompt] + encoded_images
+
+    # Generate content
+    try:
+        response = model.generate_content(
+            content,
+            generation_config={"response_mime_type": "application/json"}
+        )
+        return json.loads(response.text)
+    except Exception as e:
+        return {"error": str(e)}
 
 # Function to convert PDF to images
 def pdf_to_images(pdf_file):
@@ -88,10 +131,6 @@ col1, col2 = st.columns([1, 3])
 with col1:
     analysis_type = st.selectbox("Select analysis type", ["Text only", "Vision"])
 with col2:
-    if analysis_type == "Vision":
-        openai_api_key = st.text_input("Enter your OpenAI API key", type="password")
-        if openai_api_key:
-            st.session_state.openai_api_key = openai_api_key
     gemini_api_key = st.text_input("Enter your Gemini API key", type="password")
     if gemini_api_key:
         st.session_state.gemini_api_key = gemini_api_key
@@ -148,14 +187,14 @@ if uploaded_files:
             if analysis_type == "Text only":
                 system_prompt = f"Perform a SWOT analysis with each category limited to {max_word_count} words. Return a JSON object with keys: Strengths, Weaknesses, Opportunities, Threats, Total Marks, Word Count."
                 user_prompt = f"Text: {text}\nTotal Marks: {total_marks}\nWord Count: {word_count}\n{grading_criteria.format(total_marks=total_marks)}"
-                swot_analysis = gemini_json(system_prompt, user_prompt, url="https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=", api_key=st.session_state.gemini_api_key)
+                swot_analysis = gemini_json(system_prompt, user_prompt, st.session_state.gemini_api_key)
             else:
                 system_prompt = f"Perform a SWOT analysis on this image with each category limited to {max_word_count} words. Return a JSON object with keys: Strengths, Weaknesses, Opportunities, Threats, Total Marks, Word Count."
-                image_paths = pdf_to_images(file)
-                for image_path in image_paths:
+                images = pdf_to_images(file)
+                for image_path in images:
                     base64_image = encode_image(image_path)
                     user_prompt = f"Image: {base64_image}\nTotal Marks: {total_marks}\nWord Count: {word_count}\n{grading_criteria.format(total_marks=total_marks)}"
-                    swot_analysis = gemini_json(system_prompt, user_prompt, url="https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=", api_key=st.session_state.gemini_api_key)
+                    swot_analysis = process_images_gemini(images, user_prompt, st.session_state.gemini_api_key)
             
             # Validate returned JSON keys
             if not all(key in swot_analysis for key in expected_json_keys):
