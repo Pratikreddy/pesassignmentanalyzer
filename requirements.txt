@@ -4,7 +4,5 @@ json
 pandas
 pdf2image
 pillow
-pytesseract
 python-docx
 openai
-gemini-api
