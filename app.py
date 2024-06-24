@@ -10,6 +10,7 @@ import pytesseract
 import base64
 import mimetypes
 import google.generativeai as genai
+import io
 
 # Load secrets
 gemini_key = st.secrets["gemini"]["api_key"]
@@ -97,7 +98,10 @@ def process_images_gemini(images, prompt, api_key):
 # Function to convert PDF to images using PyMuPDF
 def pdf_to_images(pdf_file):
     images = []
-    document = fitz.open(stream=pdf_file.read(), filetype="pdf")
+    file_bytes = pdf_file.read()
+    if not file_bytes:
+        raise ValueError("The PDF file is empty.")
+    document = fitz.open(stream=io.BytesIO(file_bytes), filetype="pdf")
     for page_num in range(len(document)):
         page = document.load_page(page_num)
         pix = page.get_pixmap()
