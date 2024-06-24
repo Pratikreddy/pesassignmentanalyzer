@@ -6,6 +6,7 @@ from pdf2image import convert_from_path
 from docx import Document
 from pdfminer.high_level import extract_text as extract_text_from_pdf
 from PIL import Image
+import pytesseract
 import base64
 import mimetypes
 import google.generativeai as genai
@@ -26,9 +27,14 @@ def extract_text(file):
     text = ""
     if file.type == "application/pdf":
         text = extract_text_from_pdf(file)
+        if not text.strip():
+            images = convert_from_path(file)
+            text = " ".join(pytesseract.image_to_string(image) for image in images)
     elif file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
         doc = Document(file)
         text = '\n'.join([paragraph.text for paragraph in doc.paragraphs])
+    elif file.type.startswith("image/"):
+        text = pytesseract.image_to_string(Image.open(file))
     else:
         text = file.read().decode("utf-8")
     return text
@@ -126,14 +132,10 @@ st.set_page_config(layout="wide")
 
 st.title("Assignment Evaluation Environment")
 
-# Top left analysis type and API key input
+# Top left analysis type input
 col1, col2 = st.columns([1, 3])
 with col1:
     analysis_type = st.selectbox("Select analysis type", ["Text only", "Vision"])
-with col2:
-    gemini_api_key = st.text_input("Enter your Gemini API key", type="password")
-    if gemini_api_key:
-        st.session_state.gemini_api_key = gemini_api_key
 
 # Context and total marks input
 col1, col2, col3 = st.columns([2, 1, 1])
@@ -171,44 +173,41 @@ Use these criteria to assign marks out of {total_marks}.
 
 # Process files
 if uploaded_files:
-    if 'gemini_api_key' not in st.session_state:
-        st.warning("Please enter your Gemini API key.")
-    else:
-        progress_bar = st.progress(0)
-        for idx, file in enumerate(uploaded_files):
-            text = extract_text(file)
-            if not text:
-                st.error(f"No text found in {file.name}.")
-                continue
-            
-            word_count = len(text.split())
-            
-            # Call appropriate model
-            if analysis_type == "Text only":
-                system_prompt = f"Perform a SWOT analysis with each category limited to {max_word_count} words. Return a JSON object with keys: Strengths, Weaknesses, Opportunities, Threats, Total Marks, Word Count."
-                user_prompt = f"Text: {text}\nTotal Marks: {total_marks}\nWord Count: {word_count}\n{grading_criteria.format(total_marks=total_marks)}"
-                swot_analysis = gemini_json(system_prompt, user_prompt, st.session_state.gemini_api_key)
-            else:
-                system_prompt = f"Perform a SWOT analysis on this image with each category limited to {max_word_count} words. Return a JSON object with keys: Strengths, Weaknesses, Opportunities, Threats, Total Marks, Word Count."
-                images = pdf_to_images(file)
-                for image_path in images:
-                    base64_image = encode_image(image_path)
-                    user_prompt = f"Image: {base64_image}\nTotal Marks: {total_marks}\nWord Count: {word_count}\n{grading_criteria.format(total_marks=total_marks)}"
-                    swot_analysis = process_images_gemini(images, user_prompt, st.session_state.gemini_api_key)
-            
-            # Validate returned JSON keys
-            if not all(key in swot_analysis for key in expected_json_keys):
-                st.error(f"Invalid SWOT analysis response for {file.name}. Missing keys.")
-                continue
-            
-            # Display SWOT analysis with bounding boxes and colors
-            with st.expander(f"SWOT Analysis for {file.name}"):
-                st.markdown(f"<div style='border:2px solid #FFFFFF; padding: 10px; margin-bottom: 10px;'><strong>Word Count:</strong> {swot_analysis['Word Count']}<br><strong>Total Marks:</strong> {swot_analysis['Total Marks']}</div>", unsafe_allow_html=True)
-                st.markdown(f"<div style='border:2px solid #75FF33; padding: 10px; margin-bottom: 10px;'><strong>Strengths:</strong> {swot_analysis['Strengths']}</div>", unsafe_allow_html=True)
-                st.markdown(f"<div style='border:2px solid #FF33D4; padding: 10px; margin-bottom: 10px;'><strong>Weaknesses:</strong> {swot_analysis['Weaknesses']}</div>", unsafe_allow_html=True)
-                st.markdown(f"<div style='border:2px solid #FF5733; padding: 10px; margin-bottom: 10px;'><strong>Opportunities:</strong> {swot_analysis['Opportunities']}</div>", unsafe_allow_html=True)
-                st.markdown(f"<div style='border:2px solid #33FFBD; padding: 10px; margin-bottom: 10px;'><strong>Threats:</strong> {swot_analysis['Threats']}</div>", unsafe_allow_html=True)
-            
-            # Update progress bar
-            progress_bar.progress((idx + 1) / len(uploaded_files))
-        progress_bar.empty()
+    progress_bar = st.progress(0)
+    for idx, file in enumerate(uploaded_files):
+        text = extract_text(file)
+        if not text:
+            st.error(f"No text found in {file.name}.")
+            continue
+        
+        word_count = len(text.split())
+        
+        # Call appropriate model
+        if analysis_type == "Text only":
+            system_prompt = f"Perform a SWOT analysis with each category limited to {max_word_count} words. Return a JSON object with keys: Strengths, Weaknesses, Opportunities, Threats, Total Marks, Word Count."
+            user_prompt = f"Text: {text}\nTotal Marks: {total_marks}\nWord Count: {word_count}\n{grading_criteria.format(total_marks=total_marks)}"
+            swot_analysis = gemini_json(system_prompt, user_prompt, gemini_key)
+        else:
+            system_prompt = f"Perform a SWOT analysis on this image with each category limited to {max_word_count} words. Return a JSON object with keys: Strengths, Weaknesses, Opportunities, Threats, Total Marks, Word Count."
+            images = pdf_to_images(file)
+            for image_path in images:
+                base64_image = encode_image(image_path)
+                user_prompt = f"Image: {base64_image}\nTotal Marks: {total_marks}\nWord Count: {word_count}\n{grading_criteria.format(total_marks=total_marks)}"
+                swot_analysis = process_images_gemini(images, user_prompt, gemini_key)
+        
+        # Validate returned JSON keys
+        if not all(key in swot_analysis for key in expected_json_keys):
+            st.error(f"Invalid SWOT analysis response for {file.name}. Missing keys.")
+            continue
+        
+        # Display SWOT analysis with bounding boxes and colors
+        with st.expander(f"SWOT Analysis for {file.name}"):
+            st.markdown(f"<div style='border:2px solid #FFFFFF; padding: 10px; margin-bottom: 10px;'><strong>Word Count:</strong> {swot_analysis['Word Count']}<br><strong>Total Marks:</strong> {swot_analysis['Total Marks']}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='border:2px solid #75FF33; padding: 10px; margin-bottom: 10px;'><strong>Strengths:</strong> {swot_analysis['Strengths']}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='border:2px solid #FF33D4; padding: 10px; margin-bottom: 10px;'><strong>Weaknesses:</strong> {swot_analysis['Weaknesses']}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='border:2px solid #FF5733; padding: 10px; margin-bottom: 10px;'><strong>Opportunities:</strong> {swot_analysis['Opportunities']}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='border:2px solid #33FFBD; padding: 10px; margin-bottom: 10px;'><strong>Threats:</strong> {swot_analysis['Threats']}</div>", unsafe_allow_html=True)
+        
+        # Update progress bar
+        progress_bar.progress((idx + 1) / len(uploaded_files))
+    progress_bar.empty()
