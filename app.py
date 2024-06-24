@@ -2,7 +2,7 @@ import streamlit as st
 import requests
 import json
 import pandas as pd
-from pdf2image import convert_from_path
+import fitz  # PyMuPDF
 from docx import Document
 from pdfminer.high_level import extract_text as extract_text_from_pdf
 from PIL import Image
@@ -28,7 +28,7 @@ def extract_text(file):
     if file.type == "application/pdf":
         text = extract_text_from_pdf(file)
         if not text.strip():
-            images = convert_from_path(file)
+            images = pdf_to_images(file)
             text = " ".join(pytesseract.image_to_string(image) for image in images)
     elif file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
         doc = Document(file)
@@ -94,15 +94,16 @@ def process_images_gemini(images, prompt, api_key):
     except Exception as e:
         return {"error": str(e)}
 
-# Function to convert PDF to images
+# Function to convert PDF to images using PyMuPDF
 def pdf_to_images(pdf_file):
-    images = convert_from_path(pdf_file)
-    image_paths = []
-    for i, image in enumerate(images):
-        image_path = f"page_{i + 1}.png"
-        image.save(image_path, "PNG")
-        image_paths.append(image_path)
-    return image_paths
+    images = []
+    document = fitz.open(stream=pdf_file.read(), filetype="pdf")
+    for page_num in range(len(document)):
+        page = document.load_page(page_num)
+        pix = page.get_pixmap()
+        image = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+        images.append(image)
+    return images
 
 # Streamlit app
 st.set_page_config(layout="wide")
