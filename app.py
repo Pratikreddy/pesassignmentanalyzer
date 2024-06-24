@@ -2,13 +2,10 @@ import streamlit as st
 import requests
 import json
 import pandas as pd
-import fitz  # PyMuPDF
 from docx import Document
 from pdfminer.high_level import extract_text as extract_text_from_pdf
-from PIL import Image
 import pytesseract
-import base64
-import mimetypes
+from PIL import Image
 import google.generativeai as genai
 import io
 
@@ -18,19 +15,13 @@ gemini_key = st.secrets["gemini"]["api_key"]
 # Configure the Gemini API key
 genai.configure(api_key=gemini_key)
 
-# Function to encode image to base64
-def encode_image(image):
-    buffered = io.BytesIO()
-    image.save(buffered, format="PNG")
-    return base64.b64encode(buffered.getvalue()).decode('utf-8')
-
 # Function to extract text from different file types
 def extract_text(file):
     text = ""
     if file.type == "application/pdf":
         text = extract_text_from_pdf(file)
         if not text.strip():
-            images = pdf_to_images(file)
+            images = convert_from_path(file)
             text = " ".join(pytesseract.image_to_string(image) for image in images)
     elif file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
         doc = Document(file)
@@ -68,40 +59,6 @@ def gemini_json(system_prompt, user_prompt, api_key):
         return json.loads(response_data["candidates"][0]["content"]["parts"][0]["text"])
     return {}
 
-# Helper function to get MIME type based on file extension
-def get_mime_type(file_path):
-    mime_type, _ = mimetypes.guess_type(file_path)
-    return mime_type or 'application/octet-stream'
-
-# Function to process images and send to Gemini Vision API
-def process_images_gemini(images, prompt, api_key):
-    encoded_images = []
-    for image in images:
-        encoded_images.append({
-            'mime_type': 'image/png',
-            'data': encode_image(image)
-        })
-
-    model = genai.GenerativeModel("gemini-1.5-flash")
-    content = [prompt] + encoded_images
-
-    try:
-        response = model.generate_content(content, generation_config={"response_mime_type": "application/json"})
-        return json.loads(response.text)
-    except Exception as e:
-        return {"error": str(e)}
-
-# Function to convert PDF to images using PyMuPDF
-def pdf_to_images(pdf_file):
-    images = []
-    document = fitz.open(stream=pdf_file, filetype="pdf")
-    for page_num in range(len(document)):
-        page = document.load_page(page_num)
-        pix = page.get_pixmap()
-        image = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-        images.append(image)
-    return images
-
 # Streamlit app
 st.set_page_config(layout="wide")
 
@@ -110,7 +67,7 @@ st.title("Assignment Evaluation Environment")
 # Top left analysis type input
 col1, col2 = st.columns([1, 3])
 with col1:
-    analysis_type = st.selectbox("Select analysis type", ["Text only", "Vision"])
+    analysis_type = st.selectbox("Select analysis type", ["Text only"])
 
 # Context and total marks input
 col1, col2, col3 = st.columns([2, 1, 1])
@@ -122,7 +79,7 @@ with col3:
     max_word_count = st.slider("Set maximum word count:", min_value=100, max_value=3000, value=300, step=100)
 
 # File uploader
-uploaded_files = st.file_uploader("Upload assignment files", type=["pdf", "docx", "txt", "png", "jpg", "jpeg"], accept_multiple_files=True)
+uploaded_files = st.file_uploader("Upload assignment files", type=["pdf", "docx", "txt"], accept_multiple_files=True)
 
 # Expected JSON format for SWOT analysis
 expected_json_format = {
@@ -150,13 +107,6 @@ Use these criteria to assign marks out of {total_marks}.
 if uploaded_files:
     progress_bar = st.progress(0)
     for idx, file in enumerate(uploaded_files):
-        if file.type == "application/pdf":
-            file_bytes = file.read()
-            if not file_bytes:
-                st.error(f"The PDF file {file.name} is empty.")
-                continue
-            file = io.BytesIO(file_bytes)
-        
         text = extract_text(file)
         if not text:
             st.error(f"No text found in {file.name}.")
@@ -168,15 +118,7 @@ if uploaded_files:
         system_prompt = f"Perform a SWOT analysis with each category limited to {max_word_count} words. Return a JSON object with keys: Strengths, Weaknesses, Opportunities, Threats, Total Marks, Word Count."
         user_prompt = f"Text: {text}\nTotal Marks: {total_marks}\nWord Count: {word_count}\n{grading_criteria.format(total_marks=total_marks)}"
         
-        if analysis_type == "Text only":
-            swot_analysis = gemini_json(system_prompt, user_prompt, gemini_key)
-        else:
-            images = pdf_to_images(file)
-            if not images:
-                st.error(f"No images extracted from {file.name}.")
-                continue
-            user_prompt = f"Extract data from these images:\n" + "\n".join([encode_image(image) for image in images]) + f"\nTotal Marks: {total_marks}\nWord Count: {word_count}\n{grading_criteria.format(total_marks=total_marks)}"
-            swot_analysis = process_images_gemini(images, user_prompt, gemini_key)
+        swot_analysis = gemini_json(system_prompt, user_prompt, gemini_key)
         
         # Validate returned JSON keys
         if not all(key in swot_analysis for key in expected_json_keys):
