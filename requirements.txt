@@ -1,9 +1,8 @@
 streamlit
 requests
-json
 pandas
 pdf2image
 pillow
 python-docx
 pdfminer.six
-google-api-python-client
+google-generativeai
